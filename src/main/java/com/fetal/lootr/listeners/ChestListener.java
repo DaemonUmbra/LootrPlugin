@@ -4,9 +4,11 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.QuickShopAPI;
 import com.ghostchu.quickshop.api.shop.Shop;
 import org.bukkit.Bukkit;
+import org.bukkit.GameEvent;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
+import org.bukkit.block.Lidded;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.minecart.StorageMinecart;
 import org.bukkit.event.EventHandler;
@@ -25,10 +27,14 @@ import com.fetal.lootr.LootrPlugin;
 import com.fetal.lootr.manager.LootManager;
 import com.fetal.lootr.util.VersionCompat;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class ChestListener implements Listener {
 
     private final LootrPlugin plugin;
     private final LootManager lootManager;
+    private final Map<String, Integer> openChests = new HashMap<>();
 
     // QuickShop compatibility
     private boolean quickShopEnabled = false;
@@ -245,9 +251,12 @@ public class ChestListener implements Listener {
 
             event.setCancelled(true);
 
-            if (plugin.isPlaySound()) {
-                VersionCompat.playSound(player, block.getLocation(), "BLOCK_CHEST_OPEN", 1.0f, 1.0f);
+            int chestUsers = openChests.getOrDefault(chestKey, 0);
+            if (chestUsers == 0 && event.getPlayer().getWorld().getBlockState(lootManager.toLocation(chestKey)) instanceof Lidded lidded) {
+                lidded.open();
+                event.getPlayer().getWorld().sendGameEvent(null , GameEvent.CONTAINER_OPEN, lootManager.toLocation(chestKey).toVector());
             }
+            openChests.put(chestKey, ++chestUsers);
 
             if (firstTime) {
                 if (justRegistered) {
@@ -342,16 +351,20 @@ public class ChestListener implements Listener {
         if (inv.getHolder() instanceof LootrHolder) {
             LootrHolder holder = (LootrHolder) inv.getHolder();
             Player player = (Player) event.getPlayer();
+            String chestKey = holder.getChestKey();
 
             if (!player.getUniqueId().equals(holder.getViewerUuid())) {
                 plugin.debug("Skipped save for non-owner close: " + player.getName());
                 return;
             }
 
-            lootManager.savePlayerLoot(holder.getChestKey(), holder.getStorageUuid(), inv.getContents());
+            lootManager.savePlayerLoot(chestKey, holder.getStorageUuid(), inv.getContents());
 
-            if (plugin.isPlaySound()) {
-                VersionCompat.playSound(player, player.getLocation(), "BLOCK_CHEST_CLOSE", 1.0f, 1.0f);
+            int chestUsers = openChests.getOrDefault(chestKey, 0);
+            openChests.put(chestKey, --chestUsers);
+            if (chestUsers == 0 && event.getPlayer().getWorld().getBlockState(lootManager.toLocation(chestKey)) instanceof Lidded lidded) {
+                lidded.close();
+                event.getPlayer().getWorld().sendGameEvent(null , GameEvent.CONTAINER_CLOSE, lootManager.toLocation(chestKey).toVector());
             }
 
             plugin.debug("Saved loot for " + player.getName());

@@ -88,7 +88,7 @@ public class LootManager {
         return Integer.compare(a.getBlockZ(), b.getBlockZ());
     }
 
-    private Location toLocation(String key) {
+    public Location toLocation(String key) {
         try {
             String[] p = key.split(",");
             World world = Bukkit.getWorld(p[0]);
